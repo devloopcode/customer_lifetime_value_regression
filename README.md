@@ -15,6 +15,7 @@ An end-to-end machine learning regression project to predict **Customer Lifetime
 - [Business Objective](#-business-objective)
 - [Dataset Overview](#-dataset-overview)
 - [Summary Statistics](#-summary-statistics)
+- [Train / Test Split](#-train--test-split)
 - [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
 - [Strategic Business Applications](#-strategic-business-applications)
@@ -67,13 +68,51 @@ Transposed summary statistics for all numerical features across the clean dedupl
 
 ---
 
+## ✂️ Train / Test Split
+
+To prepare the dataset for predictive regression modeling while safeguarding against data leakage, the clean deduplicated dataset (8,971 records) was partitioned into training and holdout test sets using `scikit-learn`'s `train_test_split`.
+
+### Split Configuration
+
+- **Feature Matrix ($X$):** 23 predictor features (`Customer` ID dropped during deduplication; target excluded).
+- **Target Vector ($y$):** `Customer Lifetime Value` continuous target variable.
+- **Split Ratio:** 80% training / 20% holdout test (`test_size=0.2`).
+- **Random Seed:** `random_state=42` for exact experiment reproducibility.
+- **Data Leakage Verification:** Explicitly verified that `Customer Lifetime Value` is absent from both $X_{train}$ and $X_{test}$ (`False`).
+
+### Partition Dimensions
+
+| Dataset Partition | Observations | Features | Split Ratio | Role |
+| :--- | :---: | :---: | :---: | :--- |
+| **$X_{train}$** | 7,176 | 23 | 80% | Model training feature matrix |
+| **$y_{train}$** | 7,176 | 1 (Target) | 80% | Training ground truth labels |
+| **$X_{test}$** | 1,795 | 23 | 20% | Unseen holdout evaluation features |
+| **$y_{test}$** | 1,795 | 1 (Target) | 20% | Holdout evaluation ground truth |
+
+### Target Distribution Validation ($y_{train}$ vs. $y_{test}$)
+
+Evaluating target summary statistics across both splits confirms representative sampling without distribution drift:
+
+| Metric | Training Set ($y_{train}$) | Holdout Test Set ($y_{test}$) | Full Clean Set ($y$) |
+| :--- | :---: | :---: | :---: |
+| **Count** | 7,176 | 1,795 | 8,971 |
+| **Mean** | \$8,008.35 | \$7,987.57 | \$8,004.19 |
+| **Std Dev** | \$6,917.66 | \$6,667.34 | \$6,867.94 |
+| **Min** | \$1,898.01 | \$2,034.99 | \$1,898.01 |
+| **25%** | \$3,985.49 | \$4,022.24 | \$3,999.50 |
+| **Median (50%)** | \$5,802.45 | \$5,717.22 | \$5,792.44 |
+| **75%** | \$8,984.68 | \$8,900.94 | \$8,954.64 |
+| **Max** | \$74,228.52 | \$83,325.38 | \$83,325.38 |
+
+---
+
 ## 📁 Project Structure
 
 ```
 customer_lifetime_value_regression/
 │
 ├── auto_insurance.csv               # Raw dataset (9,134 records, 24 attributes)
-├── customer_lifetime_value.ipynb   # Exploratory Data Analysis, date repair, deduplication, feature profiling
+├── customer_lifetime_value.ipynb   # Exploratory Data Analysis, date repair, deduplication, train/test split
 ├── requirements.txt                 # Project environment dependencies
 └── README.md                        # Project documentation and engineering reference
 ```
