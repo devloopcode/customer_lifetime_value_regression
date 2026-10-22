@@ -16,6 +16,7 @@ An end-to-end machine learning regression project to predict **Customer Lifetime
 - [Dataset Overview](#-dataset-overview)
 - [Summary Statistics](#-summary-statistics)
 - [Train / Test Split](#-train--test-split)
+- [Exploratory Data Analysis & Key Findings](#-exploratory-data-analysis--key-findings)
 - [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
 - [Strategic Business Applications](#-strategic-business-applications)
@@ -106,13 +107,91 @@ Evaluating target summary statistics across both splits confirms representative 
 
 ---
 
+## 🔍 Exploratory Data Analysis & Key Findings
+
+In-depth exploratory data analysis conducted on the training set ($X_{train}$, $y_{train}$, 7,176 records) uncovered critical structural relationships, interaction effects, and distribution properties governing Customer Lifetime Value:
+
+### 1. Target Distribution & Skewness ($y_{train}$)
+
+- **Central Tendency:** Mean (**\$8,008.35**) vs. Median (**\$5,802.45**), demonstrating that high-value policyholders pull the parametric mean substantially above the median.
+- **Distribution Skewness:** Positive skewness of **+3.045**, characterized by a long right tail extending up to \$74,228.52 (and \$83,325.38 in the holdout test set).
+- **Modeling Implications:** Models trained with standard Mean Squared Error (MSE) loss may be heavily influenced by extreme outliers. Target transformations (e.g., $\log(y)$ or $\log(1+y)$) or loss functions robust to asymmetric heavy tails (e.g., Huber loss, Mean Absolute Error) are strong candidates for pipeline engineering.
+
+### 2. Multiplier Dynamics: The "Rays" Discovery
+
+A bivariate scatter plot of `Monthly Premium Auto` versus `Customer Lifetime Value` revealed distinct linear rays radiating outward from the origin with discrete slopes ($r = 0.4016$):
+
+- **Hypothesis Testing:** Testing whether `Coverage` (`Basic`, `Extended`, `Premium`) or `Policy Level` (`L1`, `L2`, `L3` extracted from `Policy`) explained the ray slopes revealed identical median multipliers across categories ($\approx 76$ months of premium).
+- **The Governing Driver:** Testing the implicit lifetime multiplier ($\text{CLV Multiplier} = \frac{\text{CLV}}{\text{Monthly Premium Auto}}$) across `Number of Policies` pinpointed the exact structural driver:
+  - **1 Policy:** Median multiplier $\approx 39.18$
+  - **2 Policies:** Median multiplier $\approx 120.22$
+  - **3+ Policies:** Median multiplier plateaus around $\approx 77 - 78$ across 3, 4, 5, 6, 7, 8, and 9 policies.
+- **Discretized Policy Tiers:** Discretizing policyholders into three distinct business cohorts resolves the ray structure:
+  - **Tier 1 (1 Policy):** 2,556 policyholders (35.6%) — baseline individual multiplier ($\approx 39.2\times$).
+  - **Tier 2 (2 Policies):** 1,814 policyholders (25.3%) — peak lifetime multiplier cohort ($\approx 120.2\times$).
+  - **Tier 3+ (3+ Policies):** 2,806 policyholders (39.1%) — consolidated portfolio multiplier ($\approx 78.4\times$).
+
+### 3. Feature Correlation Analysis
+
+Pairwise Pearson correlation analysis across all numerical predictors on the training set identified key predictive relationships with CLV:
+
+| Feature | Pearson Correlation ($r$) with CLV | Analytical Interpretation |
+| :--- | :---: | :--- |
+| **Monthly Premium Auto** | **+0.4016** | Primary linear driver; baseline monthly billing directly scales cumulative lifetime revenue. |
+| **Total Claim Amount** | **+0.2251** | Moderate positive association; correlated with Monthly Premium ($r \approx 0.63$), reflecting higher claim amounts on higher-value vehicles. |
+| **Income** | **+0.0246** | Weak linear correlation; policyholders with zero income (unemployed) exhibit similar CLV distributions to active earners. |
+| **Number of Policies** | **+0.0194** | Low global linear correlation despite strong non-linear interaction effect through discrete multiplier tiers. |
+| **Months Since Policy Inception** | **+0.0179** | Near-zero linear correlation; observation window captures tenure snapshot rather than cumulative aging. |
+| **Months Since Last Claim** | **+0.0062** | Minimal direct linear correlation with cumulative lifetime value. |
+| **Number of Open Complaints** | **-0.0382** | Slight negative correlation; dissatisfaction marginally correlates with lower realized account value. |
+
+> [!NOTE]
+> `Monthly Premium Auto` and `Total Claim Amount` exhibit significant collinearity ($r \approx 0.63$). Linear regression models will benefit from regularization (Ridge/Lasso) or tree-based gradient boosting models (XGBoost) that handle collinearity robustly.
+
+### 4. Numerical Distributions & Outlier Characteristics
+
+Boxplot and quartile evaluation across the 7 numerical predictors identified notable scale variations:
+
+| Feature | Min | Median (50%) | Max | Skewness | Distribution Profile |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Monthly Premium Auto** | \$61.00 | \$83.00 | \$298.00 | +2.12 | Right-skewed; 75% of premiums sit under \$109.00. |
+| **Total Claim Amount** | \$0.10 | \$384.00 | \$2,893.24 | +1.74 | Right-skewed; long tail of high-severity claims. |
+| **Income** | \$0.00 | \$33,817.00 | \$99,961.00 | +0.29 | Bimodal: zero-income cluster (25.8% unemployed) + bell-shaped active earners. |
+| **Months Since Inception** | 0.00 | 47.00 | 99.00 | -0.03 | Uniform distribution across tenure spectrum. |
+| **Months Since Last Claim** | 0.00 | 14.00 | 35.00 | +0.28 | Relatively uniform claims cadence across accounts. |
+| **Open Complaints** | 0.00 | 0.00 | 5.00 | +2.81 | Highly zero-inflated (79.4% zero, 10.9% one complaint). |
+| **Number of Policies** | 1.00 | 2.00 | 9.00 | +1.24 | Discrete count; 60.9% hold 1 or 2 policies. |
+
+### 5. Categorical Segment Profiling
+
+Evaluation of target distributions across categorical attributes highlights high-value customer segments:
+
+#### Vehicle Class (Strongest Segment Differentiator)
+- **Luxury Vehicles:** `Luxury Car` (median CLV **\$14,439.80**, $n=125$) and `Luxury SUV` (median CLV **\$14,895.40**, $n=139$) represent the highest lifetime value segment (~$2.8\times$ standard vehicles).
+- **Mid-Tier Vehicles:** `SUV` (median CLV **\$8,591.31**, $n=1,425$) and `Sports Car` (median CLV **\$8,564.37**, $n=376$).
+- **Standard Vehicles:** `Four-Door Car` (median CLV **\$5,318.90**, $n=3,633$) and `Two-Door Car` (median CLV **\$5,293.46**, $n=1,478$).
+
+#### Policy Coverage Tier
+- **Basic:** Median CLV **\$5,285.12** ($n=4,363$, 60.8% of training accounts).
+- **Extended:** Median CLV **\$6,650.64** ($n=2,150$, 30.0% of training accounts).
+- **Premium:** Median CLV **\$8,717.78** ($n=663$, 9.2% of training accounts).
+- *Progression:* Moving from Basic to Premium coverage yields an **+65.0% increase** in median customer lifetime value.
+
+#### Employment Status
+- Median CLV remains remarkably stable across employment categories: `Disabled` (\$6,503.40), `Employed` (\$5,876.37), `Unemployed` (\$5,622.94), `Retired` (\$5,550.57), and `Medical Leave` (\$5,226.55), indicating that employment status alone does not penalize lifetime value when premiums continue to be serviced.
+
+#### Acquisition Sales Channel
+- Realized median CLV is consistent across channels: `Agent` (\$5,860.48), `Branch` (\$5,824.77), `Call Center` (\$5,802.07), and `Web` (\$5,647.15), showing that acquisition channels differ primarily by sales volume and acquisition costs rather than downstream customer lifetime value.
+
+---
+
 ## 📁 Project Structure
 
 ```
 customer_lifetime_value_regression/
 │
 ├── auto_insurance.csv               # Raw dataset (9,134 records, 24 attributes)
-├── customer_lifetime_value.ipynb   # Exploratory Data Analysis, date repair, deduplication, train/test split
+├── customer_lifetime_value.ipynb   # Exploratory Data Analysis, date repair, deduplication, train/test split, feature profiling
 ├── requirements.txt                 # Project environment dependencies
 └── README.md                        # Project documentation and engineering reference
 ```
@@ -157,6 +236,7 @@ jupyter lab
 ## 💼 Strategic Business Applications
 
 - **Tiered VIP Services:** Group customers into Diamond (\$15k+), Platinum (\$10k–\$15k), Gold (\$6k–\$10k), and Standard (< \$6k) tiers based on predicted CLV to prioritize customer support queues and dedicated claim adjusters.
+- **Multi-Policy Cross-Selling:** Incentivize single-policy holders to bundle a second vehicle, capturing the massive multiplier leap from $\approx 39.2\times$ to $\approx 120.2\times$ monthly premium in realized lifetime value.
 - **Dynamic Renewal Offers:** Target specific renew offer types (`Offer1` through `Offer4`) based on channel receptivity and high projected CLV to boost contract renewal rates.
 - **Proactive Churn Intervention:** Automatically flag high-value policyholders filing complaints (`Number of Open Complaints > 0`) for executive concierge resolution.
 - **Channel Allocation:** Redirect marketing budgets toward sales channels (`Agent`, `Branch`, `Web`, `Call Center`) that consistently yield higher average lifetime customer value.
